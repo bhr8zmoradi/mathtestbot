@@ -10,10 +10,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# توکن ربات (از متغیر محیطی یا به صورت مستقیم)
 TOKEN = os.getenv('BOT_TOKEN') or "توکن_ربات_شما"
 
-# ساختار داده‌های آموزشی
 CHAPTERS = {
     1: {
         'title': 'مجموعه‌ها و احتمال',
@@ -35,13 +33,17 @@ CHAPTERS = {
                 'options': ['الف) {1,2,3}', 'ب) 1,2,3'],
                 'answer': 0
             }
+        },
+        'exams': {
+            1: {
+                'title': 'آزمون پایانی فصل',
+                'description': 'این آزمون شامل 10 سوال از مباحث فصل می‌باشد'
+            }
         }
     }
 }
 
-# --- توابع مدیریت منو ---
 def start(update: Update, context: CallbackContext):
-    """شروع ربات و نمایش منوی اصلی"""
     keyboard = [
         [InlineKeyboardButton("📖 درسنامه", callback_data="menu_lessons_1")],
         [InlineKeyboardButton("✏️ تمرین", callback_data="menu_practice_1")],
@@ -59,20 +61,22 @@ def start(update: Update, context: CallbackContext):
         )
 
 def handle_menu(update: Update, context: CallbackContext):
-    """مدیریت کلیک روی منوی اصلی"""
     query = update.callback_query
     query.answer()
     data = query.data.split('_')
     
-    if data[1] == 'lessons':
-        show_lessons_menu(update, int(data[2]))
-    elif data[1] == 'practice':
-        start_practice(update, int(data[2]))
-    elif data[1] == 'exam':
-        start_exam(update, int(data[2]))
+    try:
+        if data[1] == 'lessons':
+            show_lessons_menu(update, int(data[2]))
+        elif data[1] == 'practice':
+            start_practice(update, int(data[2]))
+        elif data[1] == 'exam':
+            start_exam(update, int(data[2]))
+    except Exception as e:
+        logger.error(f"خطا در handle_menu: {e}")
+        query.edit_message_text("⚠️ خطایی رخ داد. لطفاً دوباره امتحان کنید.")
 
 def show_lessons_menu(update: Update, chapter: int):
-    """نمایش لیست درسنامه‌های یک فصل"""
     query = update.callback_query
     lessons = CHAPTERS[chapter]['lessons']
     keyboard = [
@@ -83,83 +87,109 @@ def show_lessons_menu(update: Update, chapter: int):
     
     query.edit_message_text(
         f"📚 درسنامه‌های فصل {chapter}:\n\nلطفاً درس مورد نظر را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard))
     )
 
 def show_lesson_content(update: Update, context: CallbackContext):
-    """نمایش محتوای یک درس خاص"""
     query = update.callback_query
     query.answer()
     data = query.data.split('_')
-    chapter = int(data[1])
-    lesson = int(data[2])
     
-    lesson_data = CHAPTERS[chapter]['lessons'][lesson]
-    
-    keyboard = [
-        [InlineKeyboardButton("🎥 تماشای ویدیو", url=lesson_data['video'])],
-        [InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_lessons_{chapter}")]
-    ]
-    
-    query.edit_message_text(
-        f"📖 {lesson_data['title']}\n\n{lesson_data['content']}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    try:
+        chapter = int(data[1])
+        lesson = int(data[2])
+        lesson_data = CHAPTERS[chapter]['lessons'][lesson]
+        
+        keyboard = [
+            [InlineKeyboardButton("🎥 تماشای ویدیو", url=lesson_data['video'])],
+            [InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_lessons_{chapter}")]
+        ]
+        
+        query.edit_message_text(
+            f"📖 {lesson_data['title']}\n\n{lesson_data['content']}",
+            reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        logger.error(f"خطا در show_lesson_content: {e}")
+        query.edit_message_text("⚠️ خطا در نمایش درس. لطفاً دوباره امتحان کنید.")
 
-def start_practice(update: Update, chapter: int):
-    """شروع بخش تمرینات"""
+def start_practice(update: Update, chapter: int):  # اصلاح تایپو (حذف r اضافه)
     query = update.callback_query
     query.answer()
-    exercise = CHAPTERS[chapter]['exercises'][1]  # اولین تمرین
-    keyboard = [
-        [InlineKeyboardButton(option, callback_data=f"ex_answer_{chapter}_1_{i}")]
-        for i, option in enumerate(exercise['options'])
-    ]
-    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
     
-    query.edit_message_text(
-        f"✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    try:
+        exercise = CHAPTERS[chapter]['exercises'][1]
+        keyboard = [
+            [InlineKeyboardButton(option, callback_data=f"ex_answer_{chapter}_1_{i}")]
+            for i, option in enumerate(exercise['options'])
+        ]
+        keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
+        
+        query.edit_message_text(
+            f"✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
+            reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        logger.error(f"خطا در start_practice: {e}")
+        query.edit_message_text("⚠️ خطا در نمایش تمرین. لطفاً دوباره امتحان کنید.")
+
+def start_exam(update: Update, chapter: int):  # تابع جدید اضافه شد
+    query = update.callback_query
+    query.answer()
+    
+    try:
+        exam = CHAPTERS[chapter]['exams'][1]
+        keyboard = [
+            [InlineKeyboardButton("شروع آزمون", callback_data=f"start_exam_{chapter}_1")],
+            [InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")]
+        ]
+        
+        query.edit_message_text(
+            f"📝 {exam['title']}\n\n{exam['description']}",
+            reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        logger.error(f"خطا در start_exam: {e}")
+        query.edit_message_text("⚠️ خطا در نمایش آزمون. لطفاً دوباره امتحان کنید.")
 
 def handle_exercise_answer(update: Update, context: CallbackContext):
-    """پاسخ به سوالات تمرین"""
     query = update.callback_query
     query.answer()
-    data = query.data.split('_')
-    chapter = int(data[2])
-    exercise_num = int(data[3])
-    selected_option = int(data[4])
     
-    exercise = CHAPTERS[chapter]['exercises'][exercise_num]
-    if selected_option == exercise['answer']:
-        feedback = "✅ پاسخ صحیح!"
-    else:
-        feedback = "❌ پاسخ نادرست!"
-    
-    keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_practice_{chapter}")]]
-    query.edit_message_text(
-        f"{feedback}\n\n✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    try:
+        data = query.data.split('_')
+        chapter = int(data[2])
+        exercise_num = int(data[3])
+        selected_option = int(data[4])
+        
+        exercise = CHAPTERS[chapter]['exercises'][exercise_num]
+        feedback = "✅ پاسخ صحیح!" if selected_option == exercise['answer'] else "❌ پاسخ نادرست!"
+        
+        keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_practice_{chapter}")]]
+        query.edit_message_text(
+            f"{feedback}\n\n✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
+            reply_markup=InlineKeyboardMarkup(keyboard))
+    except Exception as e:
+        logger.error(f"خطا در handle_exercise_answer: {e}")
+        query.edit_message_text("⚠️ خطا در پردازش پاسخ. لطفاً دوباره امتحان کنید.")
 
-# --- تنظیمات اصلی ربات ---
+def error_handler(update: Update, context: CallbackContext):
+    logger.error(msg="خطا در پردازش دستور:", exc_info=context.error)
+    if update and update.effective_message:
+        update.effective_message.reply_text("⚠️ خطای سیستمی رخ داد. لطفاً بعداً تلاش کنید.")
+
 def main():
     updater = Updater(TOKEN)
     dp = updater.dispatcher
     
-    # دستورات
+    dp.add_error_handler(error_handler)
     dp.add_handler(CommandHandler("start", start))
-    
-    # مدیریت callback‌ها
     dp.add_handler(CallbackQueryHandler(handle_menu, pattern="^menu_"))
     dp.add_handler(CallbackQueryHandler(show_lesson_content, pattern="^lesson_"))
     dp.add_handler(CallbackQueryHandler(start_practice, pattern="^menu_practice_"))
+    dp.add_handler(CallbackQueryHandler(start_exam, pattern="^menu_exam_"))
     dp.add_handler(CallbackQueryHandler(handle_exercise_answer, pattern="^ex_answer_"))
     dp.add_handler(CallbackQueryHandler(start, pattern="^back_to_main"))
     
     updater.start_polling()
-    logger.info("ربات شروع به کار کرد...")
+    logger.info("✅ ربات با موفقیت شروع به کار کرد...")
     updater.idle()
 
 if __name__ == "__main__":
