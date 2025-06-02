@@ -1,103 +1,166 @@
-import telebot
-from telebot import types
+import os
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
-API_TOKEN = '7266088024:AAHSAaXeZF6PA7AxXxW4_aFsEQNN8ljPdmI'
+# تنظیمات لاگ
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-bot = telebot.TeleBot(API_TOKEN)
+# توکن ربات (از متغیر محیطی یا به صورت مستقیم)
+TOKEN = os.getenv('BOT_TOKEN') or "توکن_ربات_شما"
 
-user_state = {}
-
-main_menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-main_menu.add("📘 درسنامه اجتماع", "📗 درسنامه اشتراک")
-main_menu.add("📝 تمرین اجتماع", "🧮 تمرین اشتراک")
-main_menu.add("📊 آزمون ۵سؤالی", "🔁 شروع دوباره")
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_state[message.chat.id] = {}
-    bot.send_message(message.chat.id, " سلام! آقای درخشان .سلام اقای خسروی به ربات آموزش ریاضی مرادی خوش اومدین این فقط جهت ارائه به شخص شماست ✨\nیکی از گزینه‌های زیر رو انتخاب کن:", reply_markup=main_menu)
-
-# ---------- درسنامه‌ها ----------
-@bot.message_handler(func=lambda message: message.text == "📘 درسنامه اجتماع")
-def darsname_etehad(message):
-    text = "در ریاضیات، اجتماع دو مجموعه شامل همه‌ی اعضایی است که در حداقل یکی از دو مجموعه وجود دارند.\nمثلاً اگر A = {1,2,3} و B = {3,4,5} باشد، آن‌گاه A ∪ B = {1,2,3,4,5} است."
-    bot.send_message(message.chat.id, text)
-
-@bot.message_handler(func=lambda message: message.text == "📗 درسنامه اشتراک")
-def darsname_eshtarak(message):
-    text = "در ریاضیات، اشتراک دو مجموعه شامل اعضایی است که در هر دو مجموعه مشترک هستند.\nمثلاً اگر A = {1,2,3} و B = {3,4,5} باشد، آن‌گاه A ∩ B = {3} است."
-    bot.send_message(message.chat.id, text)
-
-# ---------- تمرین‌ها ----------
-@bot.message_handler(func=lambda message: message.text == "📝 تمرین اجتماع")
-def exercise_etehad(message):
-    user_state[message.chat.id] = {"mode": "etehad_ex", "step": 1}
-    bot.send_message(message.chat.id, "اگر A = {1, 2} و B = {2, 3} باشد، اجتماع A و B چیست؟")
-
-@bot.message_handler(func=lambda message: message.text == "🧮 تمرین اشتراک")
-def exercise_eshtarak(message):
-    user_state[message.chat.id] = {"mode": "eshtarak_ex", "step": 1}
-    bot.send_message(message.chat.id, "اگر A = {2, 4, 6} و B = {1, 2, 3} باشد، اشتراک A و B چیست؟")
-
-# ---------- آزمون ----------
-@bot.message_handler(func=lambda message: message.text == "📊 آزمون ۵سؤالی")
-def start_quiz(message):
-    user_state[message.chat.id] = {
-        "mode": "quiz",
-        "quiz_step": 1,
-        "score": 0
-    }
-    bot.send_message(message.chat.id, "آزمون شروع شد! سوال ۱:\nاگر A = {1,2} و B = {2,3} باشد، A ∪ B چیست؟")
-
-# ---------- پاسخ‌دهی ----------
-@bot.message_handler(func=lambda message: True)
-def handle_answer(message):
-    state = user_state.get(message.chat.id, {})
-    if state.get("mode") == "etehad_ex":
-        if state["step"] == 1:
-            if message.text == "{1, 2, 3}":
-                bot.send_message(message.chat.id, "✅ درست گفتی!")
-            else:
-                bot.send_message(message.chat.id, "❌ پاسخ نادرست. جواب درست: {1, 2, 3}")
-            user_state[message.chat.id] = {}
-    elif state.get("mode") == "eshtarak_ex":
-        if state["step"] == 1:
-            if message.text == "{2}":
-                bot.send_message(message.chat.id, "✅ عالیه!")
-            else:
-                bot.send_message(message.chat.id, "❌ نه، جواب صحیح: {2}")
-            user_state[message.chat.id] = {}
-    elif state.get("mode") == "quiz":
-        step = state["quiz_step"]
-        score = state["score"]
-        answers = {
-            1: "{1, 2, 3}",
-            2: "{3}",
-            3: "{1,2,3,4}",
-            4: "{2,4}",
-            5: "{1,3}"
-        }
-        if message.text == answers[step]:
-            score += 1
-            bot.send_message(message.chat.id, "✅ درست بود!")
-        else:
-            bot.send_message(message.chat.id, f"❌ نه! جواب درست: {answers[step]}")
-
-        if step < 5:
-            user_state[message.chat.id] = {"mode": "quiz", "quiz_step": step+1, "score": score}
-            next_questions = {
-                2: "سؤال ۲:\nاگر A = {1,2,3} و B = {3,4} باشد، A ∩ B چیست؟",
-                3: "سؤال ۳:\nاگر A = {1,2} و B = {2,3,4} باشد، A ∪ B چیست؟",
-                4: "سؤال ۴:\nاگر A = {2,4,6} و B = {1,2,4} باشد، A ∩ B چیست؟",
-                5: "سؤال ۵:\nاگر A = {1,3} و B = {1,3} باشد، A ∪ B چیست؟"
+# ساختار داده‌های آموزشی
+CHAPTERS = {
+    1: {
+        'title': 'مجموعه‌ها و احتمال',
+        'lessons': {
+            1: {
+                'title': 'مفهوم مجموعه',
+                'content': '📖 مجموعه به گروهی از اشیا گفته می‌شود که ویژگی مشترکی دارند.\n\nمثال:\n• مجموعه اعداد طبیعی کمتر از ۵: {1,2,3,4}',
+                'video': 'https://example.com/set-theory'
+            },
+            2: {
+                'title': 'انواع مجموعه',
+                'content': '📖 انواع مجموعه:\n1. مجموعه متناهی (مثل {1,2,3})\n2. مجموعه نامتناهی (مثل اعداد طبیعی)\n3. مجموعه تهی ({} یا ∅)',
+                'video': 'https://example.com/set-types'
             }
-            bot.send_message(message.chat.id, next_questions[step+1])
-        else:
-            bot.send_message(message.chat.id, f"✅ آزمون تمام شد! امتیاز شما: {score}/5")
-            user_state[message.chat.id] = {}
-    elif message.text == "🔁 شروع دوباره":
-        send_welcome(message)
-    else:
-        bot.send_message(message.chat.id, "لطفاً یکی از گزینه‌ها رو از منو انتخاب کن.")
+        },
+        'exercises': {
+            1: {
+                'question': 'کدام گزینه یک مجموعه است؟',
+                'options': ['الف) {1,2,3}', 'ب) 1,2,3'],
+                'answer': 0
+            }
+        }
+    }
+}
 
-bot.infinity_polling()
+# --- توابع مدیریت منو ---
+def start(update: Update, context: CallbackContext):
+    """شروع ربات و نمایش منوی اصلی"""
+    keyboard = [
+        [InlineKeyboardButton("📖 درسنامه", callback_data="menu_lessons_1")],
+        [InlineKeyboardButton("✏️ تمرین", callback_data="menu_practice_1")],
+        [InlineKeyboardButton("📝 آزمون", callback_data="menu_exam_1")]
+    ]
+    if update.message:
+        update.message.reply_text(
+            "📚 ربات آموزش ریاضی نهم\n\nفصل ۱: مجموعه‌ها و احتمال\nلطفاً بخش مورد نظر را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        update.callback_query.edit_message_text(
+            "📚 ربات آموزش ریاضی نهم\n\nفصل ۱: مجموعه‌ها و احتمال\nلطفاً بخش مورد نظر را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+def handle_menu(update: Update, context: CallbackContext):
+    """مدیریت کلیک روی منوی اصلی"""
+    query = update.callback_query
+    query.answer()
+    data = query.data.split('_')
+    
+    if data[1] == 'lessons':
+        show_lessons_menu(update, int(data[2]))
+    elif data[1] == 'practice':
+        start_practice(update, int(data[2]))
+    elif data[1] == 'exam':
+        start_exam(update, int(data[2]))
+
+def show_lessons_menu(update: Update, chapter: int):
+    """نمایش لیست درسنامه‌های یک فصل"""
+    query = update.callback_query
+    lessons = CHAPTERS[chapter]['lessons']
+    keyboard = [
+        [InlineKeyboardButton(lessons[i]['title'], callback_data=f"lesson_{chapter}_{i}")]
+        for i in lessons
+    ]
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
+    
+    query.edit_message_text(
+        f"📚 درسنامه‌های فصل {chapter}:\n\nلطفاً درس مورد نظر را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+def show_lesson_content(update: Update, context: CallbackContext):
+    """نمایش محتوای یک درس خاص"""
+    query = update.callback_query
+    query.answer()
+    data = query.data.split('_')
+    chapter = int(data[1])
+    lesson = int(data[2])
+    
+    lesson_data = CHAPTERS[chapter]['lessons'][lesson]
+    
+    keyboard = [
+        [InlineKeyboardButton("🎥 تماشای ویدیو", url=lesson_data['video'])],
+        [InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_lessons_{chapter}")]
+    ]
+    
+    query.edit_message_text(
+        f"📖 {lesson_data['title']}\n\n{lesson_data['content']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+def start_practice(update: Update, chapter: int):
+    """شروع بخش تمرینات"""
+    query = update.callback_query
+    query.answer()
+    exercise = CHAPTERS[chapter]['exercises'][1]  # اولین تمرین
+    keyboard = [
+        [InlineKeyboardButton(option, callback_data=f"ex_answer_{chapter}_1_{i}")]
+        for i, option in enumerate(exercise['options'])
+    ]
+    keyboard.append([InlineKeyboardButton("🔙 برگشت", callback_data="back_to_main")])
+    
+    query.edit_message_text(
+        f"✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+def handle_exercise_answer(update: Update, context: CallbackContext):
+    """پاسخ به سوالات تمرین"""
+    query = update.callback_query
+    query.answer()
+    data = query.data.split('_')
+    chapter = int(data[2])
+    exercise_num = int(data[3])
+    selected_option = int(data[4])
+    
+    exercise = CHAPTERS[chapter]['exercises'][exercise_num]
+    if selected_option == exercise['answer']:
+        feedback = "✅ پاسخ صحیح!"
+    else:
+        feedback = "❌ پاسخ نادرست!"
+    
+    keyboard = [[InlineKeyboardButton("🔙 برگشت", callback_data=f"menu_practice_{chapter}")]]
+    query.edit_message_text(
+        f"{feedback}\n\n✏️ تمرین فصل {chapter}:\n\n{exercise['question']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# --- تنظیمات اصلی ربات ---
+def main():
+    updater = Updater(TOKEN)
+    dp = updater.dispatcher
+    
+    # دستورات
+    dp.add_handler(CommandHandler("start", start))
+    
+    # مدیریت callback‌ها
+    dp.add_handler(CallbackQueryHandler(handle_menu, pattern="^menu_"))
+    dp.add_handler(CallbackQueryHandler(show_lesson_content, pattern="^lesson_"))
+    dp.add_handler(CallbackQueryHandler(start_practice, pattern="^menu_practice_"))
+    dp.add_handler(CallbackQueryHandler(handle_exercise_answer, pattern="^ex_answer_"))
+    dp.add_handler(CallbackQueryHandler(start, pattern="^back_to_main"))
+    
+    updater.start_polling()
+    logger.info("ربات شروع به کار کرد...")
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
